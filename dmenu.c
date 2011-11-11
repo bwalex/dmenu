@@ -20,6 +20,7 @@
 
 typedef struct Item Item;
 struct Item {
+	char *id;
 	char *text;
 	Item *left, *right;
 };
@@ -349,7 +350,8 @@ keypress(XKeyEvent *ev) {
 		break;
 	case XK_Return:
 	case XK_KP_Enter:
-		puts((sel && !(ev->state & ShiftMask)) ? sel->text : text);
+		puts((sel && !(ev->state & ShiftMask)) ?
+		    ((sel->id != NULL) ? sel->id : sel->text) : text);
 		exit(EXIT_SUCCESS);
 	case XK_Right:
 		if(text[cursor] != '\0') {
@@ -454,7 +456,7 @@ paste(void) {
 
 void
 readstdin(void) {
-	char buf[sizeof text], *p, *maxstr = NULL;
+	char buf[sizeof text], *p, *text, *maxstr = NULL;
 	size_t i, max = 0, size = 0;
 
 	/* read each line from stdin and add it to the item list */
@@ -462,10 +464,31 @@ readstdin(void) {
 		if(i+1 >= size / sizeof *items)
 			if(!(items = realloc(items, (size += BUFSIZ))))
 				eprintf("cannot realloc %u bytes:", size);
+		items[i].id = NULL;
 		if((p = strchr(buf, '\n')))
 			*p = '\0';
-		if(!(items[i].text = strdup(buf)))
-			eprintf("cannot strdup %u bytes:", strlen(buf)+1);
+
+		if(buf[0] == '$' && buf[1] == '!') {
+			p = buf;
+			for(; (*p != ' ') && (*p != '\t') && (*p != '\0'); p++)
+				;
+			if(*p == '\0')
+				eprintf("invalid format, need space or tab between id and text");
+
+			*p = '\0';
+			text = ++p;
+
+			for (; (*text == ' ') || (*text == '\t'); text++)
+				;
+
+			p = &buf[2];
+			if(!(items[i].id = strdup(p)))
+				eprintf("cannot strdup %u bytes:", strlen(p)+1);
+		} else {
+			text = buf;
+		}
+		if(!(items[i].text = strdup(text)))
+			eprintf("cannot strdup %u bytes:", strlen(text)+1);
 		if(strlen(items[i].text) > max)
 			max = strlen(maxstr = items[i].text);
 	}
